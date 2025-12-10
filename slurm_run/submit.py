@@ -60,8 +60,8 @@ if [[ -n $SLURM_STEP_ID ]] || [[ {no_srun} -eq 1 ]]; then
     tar xf {snapshot} --force-local
     export WANDB_MODE={wandb}
     ulimit -n $(ulimit -Hn)  # lift open-file limit.
-    export EVORUN_SBATCH={sbatch_path}
-    export EVORUN_SNAPSHOT={snapshot}
+    export SLURM_RUN_SBATCH={sbatch_path}
+    export SLURM_RUN_SNAPSHOT={snapshot}
     # Setup pixi environment
     # NOTE(rverkuil): PIXI_ENVIRONMENT_NAME *will* pass through, controlling the environment that is used.
     unset PIXI_ENVIRONMENT_PLATFORMS PIXI_PROJECT_MANIFEST PIXI_PROJECT_NAME PIXI_PROJECT_ROOT PIXI_PROJECT_VERSION PIXI_PROMPT
@@ -118,8 +118,8 @@ if [[ -n $SLURM_STEP_ID ]] || [[ {no_srun} -eq 1 ]]; then
     tar xf {snapshot} --force-local
     export WANDB_MODE={wandb}
     ulimit -n $(ulimit -Hn)  # lift open-file limit.
-    export EVORUN_SBATCH={sbatch_path}
-    export EVORUN_SNAPSHOT={snapshot}
+    export SLURM_RUN_SBATCH={sbatch_path}
+    export SLURM_SNAPSHOT={snapshot}
     # Log some stuff to ease debugging
     env
     hostname
@@ -140,32 +140,6 @@ else
     srun --kill-on-bad-exit --label {sbatch_path} & wait  # We need this so traps and restarting works...
 fi
 """
-
-SBATCH_RAY = """#!/usr/bin/env bash
-{prelude}
-
-export WORKDIR=$(mktemp -d -p {shared_env_dir})
-cd $WORKDIR
-tar xf {snapshot} --force-local
-export WANDB_MODE={wandb}
-ulimit -n $(ulimit -Hn)  # lift open-file limit.
-export EVORUN_SBATCH={sbatch_path}
-export EVORUN_SNAPSHOT={snapshot}
-# Setup pixi environment
-# NOTE(rverkuil): PIXI_ENVIRONMENT_NAME *will* pass through, controlling the environment that is used.
-unset PIXI_ENVIRONMENT_PLATFORMS PIXI_PROJECT_MANIFEST PIXI_PROJECT_NAME PIXI_PROJECT_ROOT PIXI_PROJECT_VERSION PIXI_PROMPT
-# Log some stuff to ease debugging
-env
-echo Building pixi environment...
-source <(./bin/pixi shell-hook --locked)
-# Clean up pixi environment, remove the env as well if it's in /tmp
-trap "nohup rm -rf $WORKDIR >/dev/null 2>&1 & disown" EXIT INT TERM QUIT USR2
-echo Running script at {sbatch_path}, with code image {snapshot} in $(pwd)...
-
-evolutionaryscale/utils/sbatch_ray.sh {command}
-rm -rf $WORKDIR
-"""
-
 
 MAIN_FUNCTIONS = {
     "orz": "projects/archimedes/reasoning/orz/experiments/ppo/train.py",
@@ -213,7 +187,6 @@ class SubmissionConfig:
     retry: bool = False
     dry_run: bool = False
     no_wandb: bool = False
-    ray: bool = False
     array_limit: int | None = None
     wait_until_completion: bool = False
 
@@ -462,7 +435,6 @@ def slurm_run(
     verbose: bool = False,
     no_wandb: bool = False,
     tag: str | None = None,
-    ray: bool = False,  # run with ray-on-slurm
     exclusive: bool = False,  # run with exclusive access to the nodes
     no_srun: bool = False,
     dependency: str = "",
@@ -484,8 +456,6 @@ def slurm_run(
 
     if not no_env_setup:
         assert test_if_pixi_lock_file_is_valid(), "Pixi lock file is not valid, please run `pixi install` or `pixi shell` to fix this."
-    else:
-        assert not ray, "Ray jobs cannot be run without pixi environment setup. Please set no_env_setup to True."
 
     if exclusive and gpus % 8 != 0:
         raise ValueError(
@@ -518,36 +488,29 @@ def slurm_run(
         run_name = sbatch_dest.name
 
     log_dest = sbatch_dest.parent / ("slurm-%A_%a.out" if array > 0 else "slurm-%j.out")
-    if ray:
-        assert gpus % 8 == 0, "Ray jobs must use entire nodes, e.g. gpus % 8 == 0"
-        nodes = gpus // 8
-        # Don't allocate as many cpus to Ray jobs for now, but adjust as needed.
-        gpu_res = f"-c {cpus*8} --gres gpu:8 -N {nodes}"
-        slurm_flags = f"#SBATCH -p {partition} -t {time_limit} -J {run_name} --nice={nice} -o {log_dest} {gpu_res} --signal B:USR2@60 --requeue --open-mode=append"
-    else:
-        if gpus <= 0:
-            # CPU only job. Simply specify how many tasks we need.
-            gpu_res = f"-n {ntasks}"
-        elif gpus < 8:
-            # For smaller training jobs ... NCCL only supports --gres here
-            gpu_res = f"-N 1 -n {gpus} --gres gpu:{gpus}"
-        elif gpus % 8 == 0:
-            # Larger training jobs, allocated as whole nodes
-            gpu_res = f"-N {gpus // 8} --ntasks-per-node 8 --gres gpu:8"
-        else:
-            # Revisit this case because it will require understanding what
-            # the user is really trying to do. Any jobs that require NCCL
-            # communication won't work without using --gres and its wasteful
-            # to allocate a whole node for a partial job. Any jobs that don't
-            # need communication will work but its a different usecase.
-            raise ValueError(
-                "Large jobs should be allocated as whole nodes, e.g. gpus % 8 == 0"
-            )
 
-        slurm_flags = f"#SBATCH {gpu_res} --cpus-per-task {cpus} -p {partition} -t {time_limit} -J {run_name} --nice={nice} -o {log_dest} --signal B:USR2@60 --requeue --open-mode=append"
+    if gpus <= 0:
+        # CPU only job. Simply specify how many tasks we need.
+        gpu_res = f"-n {ntasks}"
+    elif gpus < 8:
+        # For smaller training jobs ... NCCL only supports --gres here
+        gpu_res = f"-N 1 -n {gpus} --gres gpu:{gpus}"
+    elif gpus % 8 == 0:
+        # Larger training jobs, allocated as whole nodes
+        gpu_res = f"-N {gpus // 8} --ntasks-per-node 8 --gres gpu:8"
+    else:
+        # Revisit this case because it will require understanding what
+        # the user is really trying to do. Any jobs that require NCCL
+        # communication won't work without using --gres and its wasteful
+        # to allocate a whole node for a partial job. Any jobs that don't
+        # need communication will work but its a different usecase.
+        raise ValueError(
+            "Large jobs should be allocated as whole nodes, e.g. gpus % 8 == 0"
+        )
+
+    slurm_flags = f"#SBATCH {gpu_res} --cpus-per-task {cpus} -p {partition} -t {time_limit} -J {run_name} --nice={nice} -o {log_dest} --signal B:USR2@60 --requeue --open-mode=append"
 
     if array > 0:
-        assert not ray, "Ray jobs cannot be array jobs"
         slurm_flags += f" --array=1-{array}"
         if array_limit is not None:
             slurm_flags += f"%{array_limit}"
@@ -575,8 +538,6 @@ def slurm_run(
 
     if no_env_setup:
         template = SBATCH_NO_ENV_SETUP
-    elif ray:
-        template = SBATCH_RAY
     else:
         template = SBATCH
     sbatch = template.format(
@@ -703,7 +664,7 @@ def dump_code_image(require_pixi: bool = True) -> Path:
     path.mkdir(exist_ok=True)
     if require_pixi and not Path("./pixi.toml").exists():
         raise RuntimeError(
-            "No pixi.toml found, evorun only works in the root directory of the evolutionaryscale repository."
+            "No pixi.toml found, slurm_run only works in the root directory of the repository."
         )
     return Path(
         mkimg(
@@ -723,7 +684,7 @@ def get_image_and_sbatch_dest(
     return image_dest, sbatch_dest
 
 
-class EvoSubmitContext:
+class SlurmSubmitContext:
     """Context manager for programmatically submitting jobs to SLURM.
 
     You first create a SubmitContext with a SubmissionConfig. This cfg
@@ -799,7 +760,6 @@ class EvoSubmitContext:
         nice = self.submission_cfg.nice
         time_limit = self.submission_cfg.time_limit
         no_wandb = self.submission_cfg.no_wandb
-        ray = self.submission_cfg.ray
         array_limit = self.submission_cfg.array_limit
         wait_until_completion = self.submission_cfg.wait_until_completion
 
@@ -836,7 +796,6 @@ class EvoSubmitContext:
             array=array,
             array_limit=array_limit,
             no_wandb=no_wandb,
-            ray=ray,
             wait_until_completion=wait_until_completion,
         )
 
@@ -857,7 +816,6 @@ __all__ = [
     "CONFIG_FILE_TEMPLATE",
     "CONFIG_FILE_TEMPLATE_WITHOUT_DICT_CAST",
     "SBATCH",
-    "SBATCH_RAY",
     "MAIN_FUNCTIONS",
     "_format_slurm_comment",
     "_is_training_job",
