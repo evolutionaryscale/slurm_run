@@ -1,7 +1,6 @@
 import click
 from tabulate import tabulate
 
-from .nightly import main as nightly_test
 from .slurm import main as slurm_submit
 from .submit import list_jobs_for_user
 
@@ -11,7 +10,6 @@ def main():
     pass
 
 
-main.add_command(nightly_test, name="test")
 main.add_command(slurm_submit, name="submit")
 
 
