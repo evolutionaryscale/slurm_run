@@ -202,7 +202,6 @@ def main(
         verbose=True,
         no_wandb=no_wandb,
         tag=tag,
-        ray=ray,
         exclusive=exclusive,
         dependency=dependency,
         comment=None,
