@@ -149,34 +149,6 @@ MAIN_FUNCTIONS = {
 }
 
 
-def _format_slurm_comment(job_type: str, proj: str) -> str:
-    # Reserved for formatting the comment string.
-    forbidden_chars = ['"', ":"]  # For safe JSON serialization.
-    for s in [job_type, proj]:
-        for c in forbidden_chars:
-            assert c not in s, f"Comment string '{s}' should not contain {c}"
-    return ":".join([job_type, proj])
-
-
-def _is_training_job(command: str) -> bool:
-    # Detect this is a single training job, a bit hacky but better than alternatives
-    # TODO(jenna): consider better method for detecting training jobs
-    return "train.py" in command or ".train" in command
-
-
-def _guess_proj_from_command(command: str) -> str:
-    # Try to guess the project of a slurm command based on the path
-    # of the program or data.
-    m = re.search(r"projects/([^/]+)", command)
-    if m:
-        return m.group(1)
-    m = re.search(r"projects\.([^\.]+)", command)
-    if m:
-        return m.group(1)
-    # Default.
-    return "other"
-
-
 @dataclass
 class SubmissionConfig:
     run_name: str
@@ -817,7 +789,6 @@ __all__ = [
     "CONFIG_FILE_TEMPLATE_WITHOUT_DICT_CAST",
     "SBATCH",
     "MAIN_FUNCTIONS",
-    "_format_slurm_comment",
     "_is_training_job",
     "_guess_proj_from_command",
     "_slurm_job_id_string",

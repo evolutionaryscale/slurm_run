@@ -3,7 +3,6 @@ import shlex
 import click
 
 from .submit import (
-    _format_slurm_comment,
     _guess_proj_from_command,
     _is_training_job,
     get_image_and_sbatch_dest,
@@ -13,29 +12,6 @@ from .submit import (
     rerun_jobs_by_tag,
     slurm_run,
 )
-
-
-def _infer_comment(command: str) -> str:
-    # This allows us to whitelist different training jobs.
-    TRAIN_JOB_WHITELIST = ["verl_rl", "dpo", "causal_rl"]
-
-    def _is_whitelisted_training_job():
-        for name in TRAIN_JOB_WHITELIST:
-            if (
-                f"{name}.py" in command
-                or f".{name}" in command
-                or f"/{name}" in command
-            ):
-                return True
-        return False
-
-    job_type = (
-        "training"
-        if _is_training_job(command) or _is_whitelisted_training_job()
-        else "other"
-    )
-    proj = _guess_proj_from_command(command)
-    return _format_slurm_comment(job_type=job_type, proj=proj)
 
 
 @click.command(
@@ -231,7 +207,7 @@ def main(
         ray=ray,
         exclusive=exclusive,
         dependency=dependency,
-        comment=_infer_comment(command),
+        comment=None,
         notify=notify,
         no_env_setup=no_env_setup,
     )
