@@ -20,7 +20,8 @@ include = ["slurm_run"]
 [project.scripts]
 slurm = "slurm_run.cli:main"
 
-[tool.pixi.workspace]
+[tool.pixi.project]
+name = "slurm_run"
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 
