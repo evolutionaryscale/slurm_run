@@ -51,7 +51,7 @@ CONFIG_FILE_TEMPLATE_WITHOUT_DICT_CAST = (
 )
 
 
-SBATCH = """#!/usr/bin/env bash
+SBATCH_PIXI = """#!/usr/bin/env bash
 {prelude}
 
 if [[ -n $SLURM_STEP_ID ]] || [[ {no_srun} -eq 1 ]]; then
@@ -109,7 +109,7 @@ else
 fi
 """
 
-SBATCH_NO_ENV_SETUP = """#!/usr/bin/env bash
+SBATCH_UV = """#!/usr/bin/env bash
 {prelude}
 
 if [[ -n $SLURM_STEP_ID ]] || [[ {no_srun} -eq 1 ]]; then
@@ -414,7 +414,7 @@ def slurm_run(
     constraint: str = "h100-reserved",
     comment: str | None = None,
     notify: bool = False,
-    no_env_setup: bool = False,
+    venv: str = "pixi",
 ) -> str:
     # Warn if PIXI_CACHE_DIR is set (no longer needed on new filesystem)
     if "PIXI_CACHE_DIR" in os.environ:
@@ -426,7 +426,7 @@ def slurm_run(
         )
         print()
 
-    if not no_env_setup:
+    if venv == "pixi":
         assert test_if_pixi_lock_file_is_valid(), "Pixi lock file is not valid, please run `pixi install` or `pixi shell` to fix this."
 
     if exclusive and gpus % 8 != 0:
@@ -501,10 +501,14 @@ def slurm_run(
         ), 'Please make sure comment parameter does NOT include " chars.'
         slurm_flags += f' --comment "{comment}"'
 
-    if no_env_setup:
-        template = SBATCH_NO_ENV_SETUP
-    else:
-        template = SBATCH
+    match venv:
+        case "pixi":
+            template = SBATCH_PIXI
+        case "uv":
+            template = SBATCH_UV
+        case _:
+            raise ValueError(f"Unknown virtual environment type "{venv}". Must be in ['pixi', 'uv'].")
+
     sbatch = template.format(
         prelude=f"{slurm_flags}\n{_slurm_retry_trap() if retry else ''}",
         snapshot=shlex.quote(str(image)),

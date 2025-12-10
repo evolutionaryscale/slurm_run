@@ -127,10 +127,9 @@ Run an array job - we don't allow envvars for security purposes, please detect S
     help="whether to notify the user via slack or not",
 )
 @click.option(
-    "--no-env-setup",
-    is_flag=True,
-    default=False,
-    help="If set, will not setup the pixi environment.",
+    "--venv",
+    type=click.Choice(["pixi", "uv"], case_sensitive=False),
+    help="If pixi, will snapshot and run commands under the current pixi env.",
 )
 def main(
     command,
@@ -154,7 +153,7 @@ def main(
     exclusive,
     dependency,
     notify,
-    no_env_setup,
+    venv,
 ):
     # Rerun existing jobs
     if rerun_id:
@@ -179,7 +178,7 @@ def main(
             f"Job with name {run_name} is already active, please select another name."
         )
 
-    require_pixi = not no_env_setup
+    require_pixi = (venv.lower() == "pixi")
     image_dest, sbatch_dest = get_image_and_sbatch_dest(require_pixi=require_pixi)
 
     command = " ".join(shlex.quote(x) for x in command)
@@ -207,6 +206,6 @@ def main(
         dependency=dependency,
         comment=None,
         notify=notify,
-        no_env_setup=no_env_setup,
+        venv=venv,
     )
     return 0
