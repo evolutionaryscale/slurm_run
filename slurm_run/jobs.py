@@ -109,6 +109,9 @@ def list_jobs_for_user(
     return job_data
 
 
+@click.command(
+    help="Examples: slurm_run jobs"
+)
 @click.option(
     "--starttime",
     type=str,
