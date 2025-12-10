@@ -155,6 +155,7 @@ MAIN_FUNCTIONS = {
 class SubmissionConfig:
     run_name: str
     partition: str
+    qos: str
     gpus: int
     nice: int = 0
     time_limit: str = "7-0"
@@ -225,9 +226,9 @@ def job_name_active(job_name: str) -> Union[dict, None]:
 
 
 def current_job_partition() -> str:
-    """Get the partition of the current job or default to midpri if not set"""
+    """Get the partition of the current job or default to h100-reserved if not set"""
     if "SLURM_JOB_PARTITION" not in os.environ:
-        return "midpri"
+        return "h100-reserved"
     return os.environ["SLURM_JOB_PARTITION"]
 
 
@@ -286,6 +287,7 @@ def slurm_run(
     sbatch_dest: Path,
     run_name: str | None = None,
     partition: str | None = None,
+    qos: str | None = None,
     gpus: int = 8,
     cpus: int = 8,
     ntasks: int | None = None,
@@ -337,6 +339,9 @@ def slurm_run(
     if partition is None:
         partition = "h100-reserved"
 
+    if qos is None:
+        qos = "normal"
+
     if not run_name:
         print(
             f"No job name specified, defaulting to sbatch filename '{sbatch_dest.name}'"
@@ -364,7 +369,7 @@ def slurm_run(
             "Large jobs should be allocated as whole nodes, e.g. gpus % 8 == 0"
         )
 
-    slurm_flags = f"#SBATCH {gpu_res} --cpus-per-task {cpus} -p {partition} -t {time_limit} -J {run_name} --nice={nice} -o {log_dest} --signal B:USR2@60 --requeue --open-mode=append"
+    slurm_flags = f"#SBATCH {gpu_res} --cpus-per-task {cpus} -p {partition} --qos={qos} -t {time_limit} -J {run_name} --nice={nice} -o {log_dest} --signal B:USR2@60 --requeue --open-mode=append"
 
     if array > 0:
         slurm_flags += f" --array=1-{array}"
@@ -458,19 +463,24 @@ def slurm_run(
 
 def _verify_submission_cfg(submission_cfg: SubmissionConfig):
     assert submission_cfg.partition in [
-        "lowpri",
-        "midpri",
-        "highpri",
-        "hero",
-        "antihero",
+        "h100-reserved",
+        "h200-reserved",
     ]
+
+    assert submission_cfg.qos in [
+        "normal",
+        "low",
+        "mid",
+        "dev",
+    ]
+
     assert submission_cfg.gpus > 0
     assert submission_cfg.gpus % 8 == 0 or submission_cfg.gpus < 8
 
 
 def mkimg(
     e: str,
-    ignore: str = "wandb/,*.egg-info/,.pixi/,.git/,slurm/",
+    ignore: str = "wandb/,*.egg-info/,.pixi/,.git/,slurm/,.venv/",
     dest: str = ".code_snapshots",
     force: list[str] | None = None,
     require_pixi: bool = True,
@@ -559,7 +569,7 @@ class SlurmSubmitContext:
 
     Usage example:
     ```
-    cfg = SubmissionConfig("run1", "highpri", gpus=1)
+    cfg = SubmissionConfig("run1", "h100-reserved", qos="mid", gpus=1)
     with EvoSubmitContext("hello.py", cfg) as ctx:
         ctx.submit(TestConfig(a=1, b=2))
         ctx.submit(TestConfig(a=1, b=2))
@@ -614,6 +624,7 @@ class SlurmSubmitContext:
         assert self.image_dest is not None
         gpus = self.submission_cfg.gpus
         partition = self.submission_cfg.partition
+        qos = self.submission_cfg.qos
         retry = self.submission_cfg.retry
         run_name = self.submission_cfg.run_name
         dry_run = self.submission_cfg.dry_run
@@ -647,6 +658,7 @@ class SlurmSubmitContext:
             Path(self.config_prefix).with_suffix(".sh"),
             run_name=run_name,
             partition=partition,
+            qos=qos,
             gpus=gpus,
             nice=nice,
             time_limit=time_limit,
@@ -697,8 +709,14 @@ Run an array job - we don't allow envvars for security purposes, please detect S
 @click.option(
     "--partition",
     type=str,
-    default="midpri",
+    default="h100-reserved",
     help="The partition to use, defaults to all on slurm.",
+)
+@click.option(
+    "--qos",
+    type=str,
+    default="normal",
+    help="What qos to use, defaults to normal.",
 )
 @click.option("--gpus", type=int, default=8, help="The number of GPUs requested.")
 @click.option("--cpus", type=int, default=8, help="Number of CPUs per task.")
@@ -795,6 +813,7 @@ def submit(
     command,
     run_name,
     partition,
+    qos,
     gpus,
     cpus,
     ntasks,
@@ -826,11 +845,8 @@ def submit(
         rerun_jobs_by_name(rerun_name)
         return 0
 
-    if partition not in ["highpri", "midpri", "lowpri", "hero", "antihero"]:
-        raise ValueError(
-            f"Specified partition ({partition}) not in (high|mid|low)pri, hero, or "
-            f"antihero."
-        )
+    if partition not in ["h100-reserved", "h200-reserved"]:
+        raise ValueError(f"Specified partition ({partition}) not in h(100|200)-reserved")
 
     if run_name and job_name_active(run_name):
         # Avoid collisions with other active jobs
@@ -849,6 +865,7 @@ def submit(
         sbatch_dest=sbatch_dest,
         run_name=run_name,
         partition=partition,
+        qos=qos,
         gpus=gpus,
         cpus=cpus,
         ntasks=ntasks,
