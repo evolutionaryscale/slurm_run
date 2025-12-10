@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from getpass import getuser
 from pathlib import Path
-from typing import Union
+from typing import List, Union
 
 import click
 import shlex
@@ -179,10 +179,11 @@ def _slurm_retry_trap():
     )
 
 
-def _maybe_path(lst) -> Path:
+def _maybe_path(lst: List[str]) -> Path:
     for p in lst:
-        if (p := Path(p)).exists():
-            return p
+        pth = Path(p).expanduser()
+        if pth.exists():
+            return pth
     else:
         raise RuntimeError(f"No path found in {lst}")
 
@@ -519,7 +520,7 @@ def mkimg(
 
 
 def dump_code_image(require_pixi: bool = True) -> Path:
-    path = _maybe_path([f"/mnt/main0/home/{getuser()}"]) / "slurm"
+    path = _maybe_path(["~"]) / "slurm"
     path.mkdir(exist_ok=True)
     if require_pixi and not Path("./pixi.toml").exists():
         raise RuntimeError(
