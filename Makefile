@@ -1,9 +1,9 @@
-.PHONY: install_uv install_evorun install_pixi
+.PHONY: install_uv install install_pixi install_fd_find link_fd install_pipx
 
 SHELL := /bin/bash
 BINARY_PATH := /mnt/main0/shared/tools/evorun-0.1.0.tar.gz
 
-all: install_evorun
+all: install
 
 install_uv:
 	@source ~/.bashrc; \
@@ -24,22 +24,24 @@ install_pixi:
 		echo "Pixi is already installed."; \
 	fi
 
-install_fd:
+install_fd_find:
 	@ \
 	if ! command -v fdfind &> /dev/null; then \
 		echo "Installing fd ..."; \
 		sudo apt install fd-find; \
 	else \
-		echo "fd is already installed."; \
+		echo "fdfind is already installed."; \
 	fi
 
-link_fd: install_fd
+link_fd: install_fd_find
+	@mkdir -p "$(HOME)/.local/bin"
 	@ \
-	if ! [ -f "~/.local/bin/fd" ]; then \
-		ln -s $(which fdfind) ~/.local/bin/fd; \
+	if ! [ -f $(HOME)/.local/bin/fd ]; then \
+		ln -s $$(command -v fdfind) $(HOME)/.local/bin/fd; \
 	fi
 
 install_pipx:
+	@ \
 	if ! command -v pipx &> /dev/null; then \
 		echo "Installing pipx..."; \
 		pixi global install pipx; \
