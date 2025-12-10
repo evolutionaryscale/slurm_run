@@ -86,7 +86,7 @@ if [[ -n $SLURM_STEP_ID ]] || [[ {no_srun} -eq 1 ]]; then
     source <(echo "$output")
     # Clean up pixi environment, remove the env as well if it's in /tmp
     echo Running script at {sbatch_path}, with code image {snapshot} in $(pwd)...
-    uv run {command} & PID=$!
+    {command} & PID=$!
     trap "kill -TERM $PID; wait $PID" TERM
     trap "kill -USR2 $PID; wait $PID" USR2
     wait $PID
@@ -127,7 +127,7 @@ if [[ -n $SLURM_STEP_ID ]] || [[ {no_srun} -eq 1 ]]; then
     hostname
 
     echo Running script at {sbatch_path}, with code image {snapshot} in $(pwd)...
-    {command} & PID=$!
+    uv run {command} & PID=$!
     trap "kill -TERM $PID; wait $PID" TERM
     trap "kill -USR2 $PID; wait $PID" USR2
     wait $PID
