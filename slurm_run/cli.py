@@ -1,6 +1,6 @@
 import click
 
-from .slurm import submit
+from .submit import submit
 from .jobs import jobs
 
 @click.group()
