@@ -8,7 +8,7 @@ all: install_evorun
 install_uv:
 	@source ~/.bashrc; \
 	if ! command -v uv &> /dev/null; then \
-		echo "Installing uv..."; \
+		echo "Installing uv ..."; \
 		"${SHELL}" <(curl -fsSL https://astral.sh/uv/install.sh); \
 	else \
 		echo "uv is already installed."; \
@@ -17,23 +17,33 @@ install_uv:
 install_pixi:
 	@source ~/.bashrc; \
 	if ! command -v pixi &> /dev/null; then \
-		echo "Installing pixi..."; \
+		echo "Installing pixi ..."; \
 		export PIXI_VERSION=v0.54.0; \
 		"${SHELL}" <(curl -fsSL https://pixi.sh/install.sh); \
 	else \
 		echo "Pixi is already installed."; \
 	fi
 
+install_fd:
+	@source ~/.bashrc; \
+	if ! command -v fd &> /dev/null; then \
+		echo "Installing fd ..."; \
+		apt install fd-find; \
+		ln -s $(which fdfind) ~/.local/bin/fd; \
+	else \
+		echo "fd is already installed."; \
+	fi
+
 install_pipx:
 	@source ~/.bashrc; \
 	if ! command -v pipx &> /dev/null; then \
 		echo "Installing pipx..."; \
-		"${SHELL}" <pixi global install pipx; \
+		pixi global install pipx; \
 	else \
 		echo "pipx is already installed."; \
 	fi
 
-install: install_pixi install_uv install_pipx
+install: install_pixi install_uv install_pipx install_fd
 	@source ~/.bashrc; \
 	pipx install . \
 	echo "slurm_run is installed globally"
