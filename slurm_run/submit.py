@@ -486,9 +486,9 @@ def mkimg(
         f"-E '{pattern.strip()}'" for pattern in ignore.split(",") if pattern.strip()
     ]
 
-    fd_cmd_parts = ["fd", "-u"] + extensions + ["--type", "f"] + excludes + ["."]
+    fd_cmd_parts = ["fdfind", "-u"] + extensions + ["--type", "f"] + excludes + ["."]
     fd_cmd = " ".join(fd_cmd_parts)
-    fd_links = f"fd -u -t l {' '.join(excludes)}"  # for softlinks of any ext
+    fd_links = f"fdfind -u -t l {' '.join(excludes)}"  # for softlinks of any ext
 
     # Optionally package pixi to make this hermetic\
     if require_pixi:

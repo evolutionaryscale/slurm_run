@@ -29,7 +29,6 @@ install_fd:
 	if ! command -v fd &> /dev/null; then \
 		echo "Installing fd ..."; \
 		sudo apt install fd-find; \
-		ln -s $(which fdfind) ~/.local/bin/fd; \
 	else \
 		echo "fd is already installed."; \
 	fi
