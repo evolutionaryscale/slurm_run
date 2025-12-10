@@ -3,9 +3,9 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "evorun"
+name = "slurm_run"
 version = "0.1.0"
-description = "Evorun"
+description = "Slurm job launcher"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
@@ -15,7 +15,7 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["evorun"]
+include = ["slurm_run"]
 
 [project.scripts]
-evorun = "evorun.cli:main"
+slurm = "slurm_run.cli:main"
