@@ -44,5 +44,5 @@ install_pipx:
 
 install: install_pixi install_uv install_pipx install_fd
 	@source ~/.bashrc; \
-	pipx install . \
+	pipx install -f . \
 	echo "slurm_run is installed globally"

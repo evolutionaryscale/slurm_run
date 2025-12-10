@@ -5,7 +5,6 @@ import re
 import click
 from tabulate import tabulate
 
-from .submit import list_jobs_for_user
 from .utils import get_user_jobs
 
 
