@@ -1,6 +1,20 @@
+from contextlib import contextmanager
+import json
 import os
 import subprocess
-from contextlib import contextmanager
+
+from getpass import getuser
+
+
+def get_user_jobs(starttime: str = "now-4weeks", user: str | None = None) -> dict:
+    """Get all jobinfo for the current user. Always lists in order of job id."""
+    output = subprocess.check_output(
+        ["sacct", "-u", user or getuser(), "--json", "--starttime", starttime],
+        text=True,
+    )
+    job_info = json.loads(output)["jobs"]
+
+    return job_info
 
 
 def test_if_pixi_lock_file_is_valid() -> bool:

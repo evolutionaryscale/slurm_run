@@ -1,20 +1,22 @@
 """Utilities for programmatic training job submissions to SLURM clusters."""
 
-import json
 import os
 import pickle
-import re
 import shlex
 import stat
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from getpass import getuser
 from pathlib import Path
 from typing import Union
 
+import click
+import shlex
+
+from .utils import get_user_jobs
 from .utils import temporarily_unset_slurm_env_vars, test_if_pixi_lock_file_is_valid
 
 BASE_CONFIG_FILE_TEMPLATE = """
@@ -185,71 +187,6 @@ def _maybe_path(lst) -> Path:
         raise RuntimeError(f"No path found in {lst}")
 
 
-def _get_user_jobs(starttime: str = "now-4weeks", user: str | None = None) -> dict:
-    """Get all jobinfo for the current user. Always lists in order of job id."""
-    output = subprocess.check_output(
-        ["sacct", "-u", user or getuser(), "--json", "--starttime", starttime],
-        text=True,
-    )
-    job_info = json.loads(output)["jobs"]
-
-    return job_info
-
-
-def list_jobs_for_user(
-    starttime: str,
-    user: str | None = None,
-    columns: str = "JobID,JobName,Partition,State,Elapsed",
-) -> list[dict]:
-    """Dict of selected job info for the current user"""
-    user_jobs = _get_user_jobs(starttime, user)
-    job_data = []
-
-    for job in user_jobs:
-        wandb_run_name = get_wandb_run_name_from_script(job["submit_line"])
-
-        job_info = {
-            "JobID": job["job_id"],
-            "ArrayJobID": job["array"]["job_id"],
-            "JobName": job["name"],
-            "Tag": job["comment"]["job"].strip('"'),
-            "Partition": job["partition"],
-            "State": ",".join(
-                job["state"]["current"]
-            ),  # Note: unclear why this is a list
-            "Command": job["submit_line"],
-            "Stdout": job["stdout_expanded"],
-            "Stderr": job["stderr_expanded"],
-            "Elapsed": str(timedelta(seconds=int(job["time"]["elapsed"]))),
-            "WandBJobName": wandb_run_name,
-        }
-        job_data.append(job_info)
-
-    if not job_data:
-        print(f"No jobs found since starttime {starttime}")
-        return []
-
-    # Always filter columns based on user preference (including default)
-    requested_columns = [col.strip() for col in columns.split(",")]
-    available_columns = job_data[0].keys() if job_data else []
-
-    # Validate requested columns
-    invalid_columns = [col for col in requested_columns if col not in available_columns]
-    if invalid_columns:
-        raise ValueError(
-            f"Invalid columns: {invalid_columns}. Available columns: {list(available_columns)}"
-        )
-
-    # Filter columns for each job
-    filtered_job_data = []
-    for job in job_data:
-        filtered_job = {col: job[col] for col in requested_columns}
-        filtered_job_data.append(filtered_job)
-    job_data = filtered_job_data
-
-    return job_data
-
-
 def _rerun_job(job_dict: dict) -> str:
     """Rerun a job given its job info"""
     if _job_running(job_dict):
@@ -277,56 +214,9 @@ def _job_running(job_dict: dict) -> bool:
     return job_dict["state"]["current"][0] in ["RUNNING", "PENDING"]
 
 
-def get_wandb_run_name_from_script(submit_line: str) -> str:
-    """
-    Extract WandB run name from a job's submit line by finding and reading the script file.
-
-    Parameters
-    ----------
-    submit_line : str
-        The submit line from the job (contains sbatch command)
-
-    Returns
-    -------
-    str
-        WandB run name or appropriate error message. Returns:
-        - The actual run name if found
-        - "N/A" if no submit line provided or logger.run_name not found in script
-        - "Error: No script found" if no script path in submit line
-        - "Error: Script file not found" if script file doesn't exist
-        - "Error: Reading script file" if file reading fails
-    """
-    if not submit_line:
-        return "N/A"
-
-    # Look for .sh script path in submit_line (sbatch <script>)
-    match = re.search(r"sbatch\s+([^\s]+\.sh)", submit_line)
-    if not match:
-        return "Error: No script found"
-
-    script_path = match.group(1)
-
-    if not os.path.exists(script_path):
-        return "Error: Script file not found"
-
-    try:
-        with open(script_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        # Look for logger.run_name=<name> pattern
-        match = re.search(r"logger\.run_name=([^\s\n]+)", content)
-        if match:
-            return match.group(1)
-        else:
-            return "N/A"
-
-    except Exception:
-        return "Error: Reading script file"
-
-
 def job_name_active(job_name: str) -> Union[dict, None]:
     """Check if a job name is already running or pending"""
-    user_jobs = _get_user_jobs()
+    user_jobs = get_user_jobs()
     for job in reversed(user_jobs):
         if job["name"] == job_name and _job_running(job):
             return job
@@ -342,7 +232,7 @@ def current_job_partition() -> str:
 
 def rerun_job_by_id(job_id: int) -> list[str]:
     """Rerun a job by its job id. Will work for both job ids and array ids."""
-    user_jobs = _get_user_jobs()
+    user_jobs = get_user_jobs()
 
     rerun_ids = []
     for job in user_jobs:
@@ -358,7 +248,7 @@ def rerun_job_by_id(job_id: int) -> list[str]:
 
 def rerun_jobs_by_tag(tag: str) -> list[str]:
     """Rerun jobs tied to a specific tag. Will attempt to run all jobs found for the tag and stop at first failure."""
-    user_jobs = _get_user_jobs()
+    user_jobs = get_user_jobs()
 
     rerun_ids = []
     for job in user_jobs:
@@ -377,7 +267,7 @@ def rerun_jobs_by_tag(tag: str) -> list[str]:
 
 def rerun_jobs_by_name(name: str) -> list[str]:
     """Rerun jobs tied to a specific name. If there are multiple in the history, the last one(s) will be rerun."""
-    user_jobs = _get_user_jobs()
+    user_jobs = get_user_jobs()
     for job in reversed(user_jobs):
         if job["name"] == name:
             if job["array"]["job_id"] != 0:
@@ -780,31 +670,200 @@ class SlurmSubmitContext:
             pickle.dump(config_to_submit, f)
 
 
-__all__ = [
-    "BASE_CONFIG_FILE_TEMPLATE",
-    "CONFIG_FILE_TEMPLATE",
-    "CONFIG_FILE_TEMPLATE_WITHOUT_DICT_CAST",
-    "SBATCH",
-    "MAIN_FUNCTIONS",
-    "_guess_proj_from_command",
-    "_slurm_job_id_string",
-    "_slurm_retry_trap",
-    "_maybe_path",
-    "_get_user_jobs",
-    "list_jobs_for_user",
-    "_rerun_job",
-    "_job_running",
-    "get_wandb_run_name_from_script",
-    "job_name_active",
-    "current_job_partition",
-    "rerun_job_by_id",
-    "rerun_jobs_by_tag",
-    "rerun_jobs_by_name",
-    "slurm_run",
-    "_verify_submission_cfg",
-    "mkimg",
-    "dump_code_image",
-    "get_image_and_sbatch_dest",
-    "SubmissionConfig",
-    "EvoSubmitContext",
-]
+@click.command(
+    help="""Examples:
+
+\b
+Simple command to run a training run:
+    slurm_run --gpus 8 --run-name MY_RUN --retry -- python train.py...
+
+\b
+Generate bash scripts and print it out, but don't run things:
+    slurm_run --gpus 8 --run-name MY_RUN --dry-run --retry -- python train.py...
+
+\b
+Run an array job - we don't allow envvars for security purposes, please detect SLURM_ARRAY_TASK_ID in your script:
+    slurm_run --gpus 8 --run-name MY_RUN --array 8 -- python train.py...
+"""
+)
+@click.argument("command", nargs=-1)
+@click.option(
+    "--run-name",
+    type=str,
+    default=None,
+    help="The (optional) name for the run. Will also override logger.run_name if applicable.",
+)
+@click.option(
+    "--partition",
+    type=str,
+    default="midpri",
+    help="The partition to use, defaults to all on slurm.",
+)
+@click.option("--gpus", type=int, default=8, help="The number of GPUs requested.")
+@click.option("--cpus", type=int, default=8, help="Number of CPUs per task.")
+@click.option(
+    "--ntasks",
+    type=int,
+    default=None,
+    help="Number of tasks to run for a CPU-only job.",
+)
+@click.option("--nice", type=int, default=0, help="The nice level of the job.")
+@click.option(
+    "--time-limit", type=str, default="7-0", help="The time limit of the job."
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="If set to True, it will only print the script to execute.",
+)
+@click.option(
+    "--retry",
+    is_flag=True,
+    default=False,
+    help="Only for slurm, it can requeue jobs on preempt / signal.",
+)
+@click.option(
+    "--array",
+    type=int,
+    default=0,
+    help="Only for slurm, it can optionally launch an array job when array > 0.",
+)
+@click.option(
+    "--array-limit",
+    type=int,
+    default=None,
+    help="Only for slurm, if set, this will restrict the max number of running array jobs.",
+)
+@click.option(
+    "--no-wandb",
+    is_flag=True,
+    default=False,
+    help="If set to True, it will not export data to Weights and Biases.",
+)
+@click.option(
+    "--tag",
+    type=str,
+    default=None,
+    help="If set, will tag the job with the specified tag",
+)
+@click.option(
+    "--rerun-id",
+    type=int,
+    default=None,
+    help="If set, will rerun the job with the specified job id or array id.",
+)
+@click.option(
+    "--rerun-tag",
+    type=str,
+    default=None,
+    help="If set, will rerun the job(s) with the specified tag.",
+)
+@click.option(
+    "--rerun-name",
+    type=str,
+    default=None,
+    help="If set, will rerun the last job(s) with the specified name.",
+)
+@click.option("--ray", is_flag=True, help="If set, will run using ray-on-slurm")
+@click.option(
+    "--exclusive",
+    is_flag=True,
+    default=False,
+    help="If set, will run the job with exclusive access to the nodes.",
+)
+@click.option(
+    "--dependency",
+    type=str,
+    default="",
+    help="Slurm job dependency. For details: https://slurm.schedmd.com/sbatch.html#OPT_dependency",
+)
+@click.option(
+    "--notify",
+    is_flag=True,
+    default=False,
+    help="whether to notify the user via slack or not",
+)
+@click.option(
+    "--venv",
+    type=click.Choice(["pixi", "uv"], case_sensitive=False),
+    required=True,
+    help="If pixi, will snapshot and run commands under the current pixi env.",
+)
+def submit(
+    command,
+    run_name,
+    partition,
+    gpus,
+    cpus,
+    ntasks,
+    nice,
+    time_limit,
+    dry_run,
+    retry,
+    array,
+    array_limit,
+    no_wandb,
+    tag,
+    rerun_id,
+    rerun_tag,
+    rerun_name,
+    ray,
+    exclusive,
+    dependency,
+    notify,
+    venv,
+):
+    # Rerun existing jobs
+    if rerun_id:
+        rerun_job_by_id(rerun_id)
+        return 0
+    if rerun_tag:
+        rerun_jobs_by_tag(rerun_tag)
+        return 0
+    if rerun_name:
+        rerun_jobs_by_name(rerun_name)
+        return 0
+
+    if partition not in ["highpri", "midpri", "lowpri", "hero", "antihero"]:
+        raise ValueError(
+            f"Specified partition ({partition}) not in (high|mid|low)pri, hero, or "
+            f"antihero."
+        )
+
+    if run_name and job_name_active(run_name):
+        # Avoid collisions with other active jobs
+        raise ValueError(
+            f"Job with name {run_name} is already active, please select another name."
+        )
+
+    require_pixi = (venv.lower() == "pixi")
+    image_dest, sbatch_dest = get_image_and_sbatch_dest(require_pixi=require_pixi)
+
+    command = " ".join(shlex.quote(x) for x in command)
+
+    _ = slurm_run(
+        command=command,
+        image=image_dest,
+        sbatch_dest=sbatch_dest,
+        run_name=run_name,
+        partition=partition,
+        gpus=gpus,
+        cpus=cpus,
+        ntasks=ntasks,
+        nice=nice,
+        time_limit=time_limit,
+        dry_run=dry_run,
+        retry=retry,
+        array=array,
+        array_limit=array_limit,
+        verbose=True,
+        no_wandb=no_wandb,
+        tag=tag,
+        exclusive=exclusive,
+        dependency=dependency,
+        comment=None,
+        notify=notify,
+        venv=venv,
+    )
+    return 0

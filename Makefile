@@ -28,7 +28,7 @@ install_fd:
 	@source ~/.bashrc; \
 	if ! command -v fd &> /dev/null; then \
 		echo "Installing fd ..."; \
-		apt install fd-find; \
+		sudo apt install fd-find; \
 		ln -s $(which fdfind) ~/.local/bin/fd; \
 	else \
 		echo "fd is already installed."; \
