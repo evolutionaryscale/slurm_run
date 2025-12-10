@@ -25,16 +25,21 @@ install_pixi:
 	fi
 
 install_fd:
-	@source ~/.bashrc; \
-	if ! command -v fd &> /dev/null; then \
+	@ \
+	if ! command -v fdfind &> /dev/null; then \
 		echo "Installing fd ..."; \
 		sudo apt install fd-find; \
 	else \
 		echo "fd is already installed."; \
 	fi
 
+link_fd: install_fd
+	@ \
+	if ! [ -f "~/.local/bin/fd" ]; then \
+		ln -s $(which fdfind) ~/.local/bin/fd; \
+	fi
+
 install_pipx:
-	@source ~/.bashrc; \
 	if ! command -v pipx &> /dev/null; then \
 		echo "Installing pipx..."; \
 		pixi global install pipx; \
@@ -42,7 +47,7 @@ install_pipx:
 		echo "pipx is already installed."; \
 	fi
 
-install: install_pixi install_uv install_pipx install_fd
+install: install_pixi install_uv install_pipx link_fd
 	@source ~/.bashrc; \
 	pipx install -f . \
 	echo "slurm_run is installed globally"
