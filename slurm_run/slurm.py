@@ -3,7 +3,6 @@ import shlex
 import click
 
 from .submit import (
-    _is_training_job,
     get_image_and_sbatch_dest,
     job_name_active,
     rerun_job_by_id,

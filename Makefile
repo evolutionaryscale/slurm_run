@@ -24,8 +24,16 @@ install_pixi:
 		echo "Pixi is already installed."; \
 	fi
 
-install: install_pixi install_uv
+install_pipx:
 	@source ~/.bashrc; \
-	uv venv; \
-	uv pip install ${BINARY_PATH}
-	echo "Activate the environment with 'source .venv/bin/activate'"
+	if ! command -v pipx &> /dev/null; then \
+		echo "Installing pipx..."; \
+		"${SHELL}" <pixi global install pipx; \
+	else \
+		echo "pipx is already installed."; \
+	fi
+
+install: install_pixi install_uv install_pipx
+	@source ~/.bashrc; \
+	pipx install . \
+	echo "slurm_run is installed globally"

@@ -446,14 +446,7 @@ def slurm_run(
     if partition is None:
         partition = "h100-reserved"
 
-    if run_name:
-        if not array:
-            if _is_training_job(command):
-                assert (
-                    "logger.run_name=" not in command
-                ), "logger.run_name already set by --run-name flag, please remove this config override"
-                command += f" logger.run_name={run_name}"
-    else:
+    if not run_name:
         print(
             f"No job name specified, defaulting to sbatch filename '{sbatch_dest.name}'"
         )
@@ -789,7 +782,6 @@ __all__ = [
     "CONFIG_FILE_TEMPLATE_WITHOUT_DICT_CAST",
     "SBATCH",
     "MAIN_FUNCTIONS",
-    "_is_training_job",
     "_guess_proj_from_command",
     "_slurm_job_id_string",
     "_slurm_retry_trap",
