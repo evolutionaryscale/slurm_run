@@ -42,7 +42,7 @@ install_pipx:
 	@source ~/.bashrc;
 	if ! command -v pipx &> /dev/null; then
 		echo "Installing pipx...";
-		pixi global install pipx;
+		~/.pixi/bin/pixi global install pipx;
 	else
 		echo "pipx is already installed.";
 	fi
