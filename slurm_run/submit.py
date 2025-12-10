@@ -507,7 +507,7 @@ def slurm_run(
         case "uv":
             template = SBATCH_UV
         case _:
-            raise ValueError(f"Unknown virtual environment type "{venv}". Must be in ['pixi', 'uv'].")
+            raise ValueError(f"Unknown virtual environment type `{venv}`. Must be in ['pixi', 'uv'].")
 
     sbatch = template.format(
         prelude=f"{slurm_flags}\n{_slurm_retry_trap() if retry else ''}",
