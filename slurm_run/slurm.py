@@ -129,6 +129,7 @@ Run an array job - we don't allow envvars for security purposes, please detect S
 @click.option(
     "--venv",
     type=click.Choice(["pixi", "uv"], case_sensitive=False),
+    required=True,
     help="If pixi, will snapshot and run commands under the current pixi env.",
 )
 def main(
