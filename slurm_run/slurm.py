@@ -3,7 +3,6 @@ import shlex
 import click
 
 from .submit import (
-    _guess_proj_from_command,
     _is_training_job,
     get_image_and_sbatch_dest,
     job_name_active,
