@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evorun"
+version = "0.1.0"
+description = "Evorun"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "click",
+    "tabulate",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["evorun"]
+
+[project.scripts]
+evorun = "evorun.cli:main"
