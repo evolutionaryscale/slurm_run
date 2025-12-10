@@ -340,7 +340,7 @@ def slurm_run(
         partition = "h100-reserved"
 
     if qos is None:
-        qos = "normal"
+        qos = "mid"
 
     if not run_name:
         print(
@@ -465,13 +465,6 @@ def _verify_submission_cfg(submission_cfg: SubmissionConfig):
     assert submission_cfg.partition in [
         "h100-reserved",
         "h200-reserved",
-    ]
-
-    assert submission_cfg.qos in [
-        "normal",
-        "low",
-        "mid",
-        "dev",
     ]
 
     assert submission_cfg.gpus > 0
@@ -715,8 +708,8 @@ Run an array job - we don't allow envvars for security purposes, please detect S
 @click.option(
     "--qos",
     type=str,
-    default="normal",
-    help="What qos to use, defaults to normal.",
+    default="mid",
+    help="What qos to use, defaults to mid.",
 )
 @click.option("--gpus", type=int, default=8, help="The number of GPUs requested.")
 @click.option("--cpus", type=int, default=8, help="Number of CPUs per task.")
