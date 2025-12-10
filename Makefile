@@ -24,17 +24,7 @@ install_pixi:
 		echo "Pixi is already installed."; \
 	fi
 
-install_fd: install_pixi
-	@source ~/.bashrc; \
-	if ! command -v fd &> /dev/null; then \
-		echo "Installing fd..."; \
-		export PIXI_VERSION=v0.54.0; \
-		"${SHELL}" <(curl -fsSL https://pixi.sh/install.sh); \
-	else \
-		echo "fd is already installed."; \
-	fi
-
-install_evorun: install_fd install_uv
+install: install_pixi install_uv
 	@source ~/.bashrc; \
 	uv venv; \
 	uv pip install ${BINARY_PATH}

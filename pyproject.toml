@@ -17,7 +17,7 @@ dependencies = [
 slurm = "slurm_run.cli:main"
 
 [tool.setuptools]
-packages = ["slurm_run"]
+packages = ["src"]
 
 [tool.pixi.project]
 name = "slurm_run"
