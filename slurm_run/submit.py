@@ -335,6 +335,16 @@ def slurm_run(
         # For GPU jobs, ntasks is ignored.
         # Warn user about this.
         print("Warning: when gpus > 0, ntasks parameter is ignored.")
+        # Note(jun) : at this point, we assume that easy task owns 1 GPU.
+        # This is not something we cannot change, just how we do things today.
+        ntasks = gpus
+    else:
+        # gpus > 0, ntasks is None, ntasks is basically number of GPUs requested.
+        ntasks = gpus
+
+    assert cpus % ntasks == 0, f"Total # of CPUs ({cpus}) must be dividable by total # of tasks ({ntasks})."
+    cpus_per_task = cpus // ntasks
+    assert cpus_per_task * 8 <= 128, f"Asking more CPUs ({cpus_per_task * 8}) than a compute instance can provide (128)."
 
     if partition is None:
         partition = "h100-reserved"
@@ -711,8 +721,8 @@ Run an array job - we don't allow envvars for security purposes, please detect S
     default="mid",
     help="What qos to use, defaults to mid.",
 )
-@click.option("--gpus", type=int, default=8, help="The number of GPUs requested.")
-@click.option("--cpus", type=int, default=8, help="Number of CPUs per task.")
+@click.option("--gpus", type=int, default=8, help="Total number of GPUs requested.")
+@click.option("--cpus", type=int, default=8, help="Total number of CPUs requested.")
 @click.option(
     "--ntasks",
     type=int,
@@ -821,7 +831,6 @@ def submit(
     rerun_id,
     rerun_tag,
     rerun_name,
-    ray,
     exclusive,
     dependency,
     notify,
