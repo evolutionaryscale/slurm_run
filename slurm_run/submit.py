@@ -787,7 +787,6 @@ Run an array job - we don't allow envvars for security purposes, please detect S
     default=None,
     help="If set, will rerun the last job(s) with the specified name.",
 )
-@click.option("--ray", is_flag=True, help="If set, will run using ray-on-slurm")
 @click.option(
     "--exclusive",
     is_flag=True,
