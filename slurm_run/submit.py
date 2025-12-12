@@ -513,7 +513,7 @@ def mkimg(
     else:
         transforms = []
 
-    forced_files = ("echo " + "\\\\n".join(force)) if force else ""
+    forced_files = ("echo " + "\\\\n".join(force)) + "; " if force else ""
 
     now = datetime.now()
     dir_format = now.strftime("%Y%m%d")
@@ -525,7 +525,7 @@ def mkimg(
 
     # package abspaths... least worst option to squelch warnings: tar: Removing leading `/' ...
     # https://unix.stackexchange.com/questions/59243/tar-removing-leading-from-member-names
-    cmd = f"({forced_files}; {fd_cmd}; {fd_links}) |  tar -cP --transform={' --transform='.join(transforms)} -T - -f - | gzip -c > {shlex.quote(tar_path)}"
+    cmd = f"({forced_files}{fd_cmd}; {fd_links}) |  tar -cP --transform={' --transform='.join(transforms)} -T - -f - | gzip -c > {shlex.quote(tar_path)}"
 
     subprocess.check_call(cmd, shell=True)
 
