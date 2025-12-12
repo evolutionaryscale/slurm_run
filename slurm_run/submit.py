@@ -379,7 +379,7 @@ def slurm_run(
             "Large jobs should be allocated as whole nodes, e.g. gpus % 8 == 0"
         )
 
-    slurm_flags = f"#SBATCH {gpu_res} --cpus-per-task {cpus} -p {partition} --qos={qos} -t {time_limit} -J {run_name} --nice={nice} -o {log_dest} --signal B:USR2@60 --requeue --open-mode=append"
+    slurm_flags = f"#SBATCH {gpu_res} --cpus-per-task {cpus_per_task} -p {partition} --qos={qos} -t {time_limit} -J {run_name} --nice={nice} -o {log_dest} --signal B:USR2@60 --requeue --open-mode=append"
 
     if array > 0:
         slurm_flags += f" --array=1-{array}"
@@ -513,7 +513,7 @@ def mkimg(
     else:
         transforms = []
 
-    forced_files = ("echo " + "\\\\n".join(force)) if force else ""
+    forced_files = ("echo " + "\\\\n".join(force)) + "; " if force else ""
 
     now = datetime.now()
     dir_format = now.strftime("%Y%m%d")
@@ -525,7 +525,7 @@ def mkimg(
 
     # package abspaths... least worst option to squelch warnings: tar: Removing leading `/' ...
     # https://unix.stackexchange.com/questions/59243/tar-removing-leading-from-member-names
-    cmd = f"({forced_files}; {fd_cmd}; {fd_links}) |  tar -cP --transform={' --transform='.join(transforms)} -T - -f - | gzip -c > {shlex.quote(tar_path)}"
+    cmd = f"({forced_files}{fd_cmd}; {fd_links}) |  tar -cP --transform={' --transform='.join(transforms)} -T - -f - | gzip -c > {shlex.quote(tar_path)}"
 
     subprocess.check_call(cmd, shell=True)
 
