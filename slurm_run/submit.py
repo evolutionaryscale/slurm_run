@@ -379,7 +379,7 @@ def slurm_run(
             "Large jobs should be allocated as whole nodes, e.g. gpus % 8 == 0"
         )
 
-    slurm_flags = f"#SBATCH {gpu_res} --cpus-per-task {cpus} -p {partition} --qos={qos} -t {time_limit} -J {run_name} --nice={nice} -o {log_dest} --signal B:USR2@60 --requeue --open-mode=append"
+    slurm_flags = f"#SBATCH {gpu_res} --cpus-per-task {cpus_per_task} -p {partition} --qos={qos} -t {time_limit} -J {run_name} --nice={nice} -o {log_dest} --signal B:USR2@60 --requeue --open-mode=append"
 
     if array > 0:
         slurm_flags += f" --array=1-{array}"
