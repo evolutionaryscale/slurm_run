@@ -539,11 +539,15 @@ def dump_code_image(require_pixi: bool = True) -> Path:
         raise RuntimeError(
             "No pixi.toml found, slurm_run only works in the root directory of the repository."
         )
+    if Path("./.env").exists():
+        force = [".env"]
+    else:
+        force = []
     return Path(
         mkimg(
             e="py,yaml,txt,toml,template,json,lock,sh,md",
             dest=str(path),
-            force=[".env"],
+            force=force,
             require_pixi=require_pixi,
         )
     )
