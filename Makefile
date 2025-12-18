@@ -1,4 +1,4 @@
-.PHONY: install_uv install install_pixi install_fd_find link_fd install_pipx
+.PHONY: install_uv install install_pixi install_fd install_pipx
 .ONESHELL:
 
 SHELL := /bin/bash
@@ -24,21 +24,7 @@ install_pixi:
 		echo "Pixi is already installed.";
 	fi
 
-install_fd_find:
-	@if ! command -v fdfind &> /dev/null; then
-		echo "Installing fd ...";
-		sudo apt install fd-find;
-	else
-		echo "fdfind is already installed.";
-	fi
-
-link_fd: install_fd_find
-	@mkdir -p "$(HOME)/.local/bin"
-	if ! [ -f $(HOME)/.local/bin/fd ]; then
-		ln -s $$(command -v fdfind) $(HOME)/.local/bin/fd;
-	fi
-
-install_pipx:
+install_pipx: install_pixi
 	@source ~/.bashrc;
 	if ! command -v pipx &> /dev/null; then
 		echo "Installing pipx...";
@@ -47,7 +33,16 @@ install_pipx:
 		echo "pipx is already installed.";
 	fi
 
-install: install_pixi install_uv install_pipx link_fd
+install_fd: install_pixi
+	@source ~/.bashrc;
+	if ! command -v fd &> /dev/null; then
+		echo "Installing fd ...";
+		pixi global install fd-find;
+	else
+		echo "fd is already installed.";
+	fi
+
+install: install_pixi install_uv install_pipx install_fd
 	@source ~/.bashrc;
 	pipx install -f .;
 	echo "slurm_run is installed globally";
