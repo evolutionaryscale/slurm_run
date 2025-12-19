@@ -91,17 +91,9 @@ if [[ -n $SLURM_STEP_ID ]] || [[ {no_srun} -eq 1 ]]; then
     trap "kill -USR2 $PID; wait $PID" USR2
     wait $PID
     exit_code=$?
-    # notify user if applicable, needs pixi env to still exist, so cant use trap, meaning scancel would skip this
-    if [[ {notify} -eq 1 ]]; then
-        # no_srun=1: SLURM_PROCID is usually unset -> this branch runs once
-        # no_srun=0: only task with SLURM_PROCID=0 runs this
-        # NOTE: might send notification early if other proc still running
-        if [[ -z "$SLURM_PROCID" || "$SLURM_PROCID" -eq 0 ]]; then
-            python $WORKDIR/scripts/slack/job_notifier.py --job-id "$SLURM_JOB_ID" --exit-code "$exit_code"
-        fi
-    fi
     echo 'Cleaning up pixi'
     rm -rf $WORKDIR
+    exit $exit_code
 
 else
     # `--kill-on-bad-exit` kills all tasks if any one task fails.
@@ -134,6 +126,7 @@ if [[ -n $SLURM_STEP_ID ]] || [[ {no_srun} -eq 1 ]]; then
     exit_code=$?
     echo 'Cleaning up'
     rm -rf $WORKDIR
+    exit $exit_code
 
 else
     # `--kill-on-bad-exit` kills all tasks if any one task fails.
@@ -142,13 +135,6 @@ else
     srun --kill-on-bad-exit --label {sbatch_path} & wait  # We need this so traps and restarting works...
 fi
 """
-
-MAIN_FUNCTIONS = {
-    "orz": "projects/archimedes/reasoning/orz/experiments/ppo/train.py",
-    "archimedes": "projects/archimedes/joint_training/train.py",
-    "train": "projects/esm3/pretraining/train.py",
-    "dpo": "projects/esm3/dpo/dpo.py",
-}
 
 
 @dataclass
@@ -306,7 +292,6 @@ def slurm_run(
     wait_until_completion: bool = False,
     constraint: str = "h100-reserved",
     comment: str | None = None,
-    notify: bool = False,
     venv: str = "pixi",
 ) -> str:
     # Warn if PIXI_CACHE_DIR is set (no longer needed on new filesystem)
@@ -423,7 +408,6 @@ def slurm_run(
         wandb="disabled" if no_wandb else "online",
         shared_env_dir=sbatch_dest.parent,
         no_srun="1" if no_srun else "0",
-        notify="1" if notify else "0",
     )
     sbatch_dest.write_text(sbatch)
     sbatch_dest.chmod(sbatch_dest.stat().st_mode | stat.S_IXUSR)
@@ -602,8 +586,6 @@ class SlurmSubmitContext:
 
         if file.endswith(".py"):
             self.file = file
-        elif file in MAIN_FUNCTIONS:
-            self.file = MAIN_FUNCTIONS[file]
         else:
             raise ValueError(f"Unknown main function {file}")
 
@@ -804,12 +786,6 @@ Run an array job - we don't allow envvars for security purposes, please detect S
     help="Slurm job dependency. For details: https://slurm.schedmd.com/sbatch.html#OPT_dependency",
 )
 @click.option(
-    "--notify",
-    is_flag=True,
-    default=False,
-    help="whether to notify the user via slack or not",
-)
-@click.option(
     "--venv",
     type=click.Choice(["pixi", "uv"], case_sensitive=False),
     required=True,
@@ -836,7 +812,6 @@ def submit(
     rerun_name,
     exclusive,
     dependency,
-    notify,
     venv,
 ):
     # Rerun existing jobs
@@ -886,7 +861,6 @@ def submit(
         exclusive=exclusive,
         dependency=dependency,
         comment=None,
-        notify=notify,
         venv=venv,
     )
     return 0
